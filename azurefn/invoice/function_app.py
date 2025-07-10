@@ -54,3 +54,11 @@ def get_invoice(req: func.HttpRequest) -> func.HttpResponse:
     except Exception as e:
         logging.exception("Error retrieving record")
         return func.HttpResponse(f"Error: {str(e)}", status_code=500)
+
+
+@app.blob_trigger(arg_name="myblob", path="fileuploads/{name}",
+                               connection="58ebfd_STORAGE") 
+def BlobTrigger(myblob: func.InputStream):
+    logging.info(f"Python blob trigger function processed blob"
+                f"Name: {myblob.name}"
+                f"Blob Size: {myblob.length} bytes")
