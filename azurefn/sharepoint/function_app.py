@@ -57,11 +57,12 @@ def update_excel(req: func.HttpRequest) -> func.HttpResponse:
         # Get file inside folder
         folder_url = f"https://graph.microsoft.com/v1.0/drives/{drive_id}/items/{folder_item_id}/children"
         folder_resp = requests.get(folder_url, headers=headers)
-        file_item = next((f for f in folder_resp.json()["value"] if plant_id in f["name"]), None)
+        expected_filename = f"{plant_id} Utility and Environmental Data.xlsx"
+        file_item = next((f for f in folder_resp.json()["value"] if f["name"] == expected_filename), None)
 
         if not file_item:
-            return func.HttpResponse(f"No Excel file found for plant ID: {plant_id}", status_code=404)
-
+            return func.HttpResponse(f"Excel file '{expected_filename}' not found", status_code=404)   
+        
         file_id = file_item["id"]
 
         # Use "Utilities" sheet 
