@@ -97,10 +97,22 @@ def update_excel(req: func.HttpRequest) -> func.HttpResponse:
 
         target_row = None
         for idx, row in enumerate(rows):
-            if len(row) > 0 and row[0] == year_month:
-                target_row = idx + 1  # Excel is 1-based
-                break
+            # Convert input "year_month" to datetime object
+            try:
+                input_date = datetime.strptime(year_month, "%Y-%m")
+            except ValueError:
+                return func.HttpResponse(f"Invalid date format: {year_month}. Expected 'YYYY-MM'", status_code=400)
 
+            # Match Excel's actual date object (not string format)
+            if len(row) > 0:
+                try:
+                    excel_cell_date = datetime.strptime(row[0], "%m/%d/%Y")
+                except ValueError:
+                    continue  # skip rows where the first column is not a valid date
+                if excel_cell_date.year == input_date.year and excel_cell_date.month == input_date.month:
+                    target_row = idx + 1  # Excel is 1-based
+                    break
+                
         if not target_row:
             return func.HttpResponse(f"Date {year_month} not found in column A", status_code=404)
 
