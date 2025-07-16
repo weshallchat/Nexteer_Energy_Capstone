@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Upload PDF to Azure Blob</title>
+</head>
+<body>
+  <h2>Upload a PDF File</h2>
+  <form id="uploadForm">
+    <input type="file" id="pdfFile" accept="application/pdf" required />
+    <button type="submit">Upload</button>
+  </form>
+  <p id="status"></p>
+
+  <script>
+    document.getElementById('uploadForm').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      const fileInput = document.getElementById('pdfFile');
+      const formData = new FormData();
+      formData.append('pdf', fileInput.files[0]);
+
+      const response = await fetch('/upload', {
+        method: 'POST',
+        body: formData
+      });
+
+      const result = await response.json();
+      const status = document.getElementById('status');
+      if (response.ok) {
+        status.textContent = `✅ Uploaded: ${result.url}`;
+      } else {
+        status.textContent = `❌ Upload failed: ${result.error}`;
+      }
+    });
+  </script>
+</body>
+</html>
