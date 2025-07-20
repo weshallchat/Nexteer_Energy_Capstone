@@ -1,2 +1,6 @@
 azure-functions
+azure-storage-blob
+azure-core
+azure-ai-documentintelligence
+openai
 azure-data-tables
