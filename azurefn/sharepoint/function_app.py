@@ -3,11 +3,31 @@ from azure.data.tables import TableServiceClient
 import os
 import logging
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta
 import jwt
  
+def get_graph_token():
+    tenant_id = os.environ["TENANT_ID"]
+    client_id = os.environ["CLIENT_ID"]
+    client_secret = os.environ["CLIENT_SECRET"]
 
- 
+    url = f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
+
+    headers = {"Content-Type": "application/x-www-form-urlencoded"}
+
+    data = {"client_id": client_id,
+            "scope": "https://graph.microsoft.com/.default",
+            "client_secret": client_secret,
+            "grant_type": "client_credentials"
+    }
+
+    response = requests.post(url, headers=headers, data=data)
+    if response.status_code == 200:
+        return response.json().get("access_token")
+    else:
+        raise Exception(f"Token request failed: {response.status_code} - {response.text}")
+    
+app = func.FunctionApp()
 @app.route(route="updateexcel", methods=["POST"])
 def update_excel(req: func.HttpRequest) -> func.HttpResponse:
 
@@ -20,9 +40,10 @@ def update_excel(req: func.HttpRequest) -> func.HttpResponse:
 
         if not (year_month and value and plant_id and utility_type):
             return func.HttpResponse("Missing parameters", status_code=400)
+        
 
         # Token and environment setup
-        access_token = os.environ["GRAPH_ACCESS_TOKEN"]
+        access_token = get_graph_token()
         headers = {
             "Authorization": f"Bearer {access_token}",
             "Content-Type": "application/json"
@@ -36,7 +57,7 @@ def update_excel(req: func.HttpRequest) -> func.HttpResponse:
             logging.warning(f"Token decode failed: {str(e)}")
 
         # Get site ID
-        site_url = "https://graph.microsoft.com/v1.0/sites/andrewcmu.sharepoint.com:/sites/Capstone-Nexteer"
+        site_url = "https://graph.microsoft.com/v1.0/sites/nexteerautomotive.sharepoint.com:/sites/GlobalEnvironmentalData"
         site_resp = requests.get(site_url, headers=headers)
         site_id = site_resp.json()["id"]
         logging.info(f"Site ID: {site_id}")
@@ -47,17 +68,17 @@ def update_excel(req: func.HttpRequest) -> func.HttpResponse:
         drive_id = drive_resp.json()["id"]
 
         # Get item ID of the folder
-        root_url = f"https://graph.microsoft.com/v1.0/drives/{drive_id}/root/children"
-        root_resp = requests.get(root_url, headers=headers)
-        folder_item_id = next((item["id"] for item in root_resp.json()["value"] if item["name"] == "Plant Data Test"), None) # Test folder. Adjust to "Plant Data" for production   
+        general_folder_url = f"https://graph.microsoft.com/v1.0/drives/{drive_id}/root:/General:/children"
+        general_resp = requests.get(general_folder_url, headers=headers)
+        folder_item_id = next((item["id"] for item in general_resp.json()["value"] if item["name"] == "Plant Data Test"), None) # Test folder. Adjust to "Plant Data" for production   
 
         if not folder_item_id:
-            return func.HttpResponse("Folder 'Plant Data' not found", status_code=404)
+            return func.HttpResponse("Folder 'Plant Data Test' not found in General folder", status_code=404)
 
         # Get file inside folder
         folder_url = f"https://graph.microsoft.com/v1.0/drives/{drive_id}/items/{folder_item_id}/children"
         folder_resp = requests.get(folder_url, headers=headers)
-        expected_filename = f"{plant_id} Utility and Environmental Data.xlsx"
+        expected_filename = f"{plant_id} Utility and Environmental Test Data.xlsx"
         file_item = next((f for f in folder_resp.json()["value"] if f["name"] == expected_filename), None)
 
         if not file_item:
@@ -96,6 +117,8 @@ def update_excel(req: func.HttpRequest) -> func.HttpResponse:
         range_resp = requests.get(range_url, headers=headers)
         rows = range_resp.json()["values"]
 
+        EXCEL_EPOCH = datetime(1899, 12, 30)
+    
         target_row = None
         for idx, row in enumerate(rows):
             # Convert input "year_month" to datetime object
@@ -106,9 +129,15 @@ def update_excel(req: func.HttpRequest) -> func.HttpResponse:
 
             # Match Excel's actual date object (not string format)
             if len(row) > 0:
+                cell_value = row[0]
                 try:
-                    excel_cell_date = datetime.strptime(row[0], "%m/%d/%Y")
-                except ValueError:
+                    if isinstance(cell_value, int):
+                        excel_cell_date = EXCEL_EPOCH + timedelta(days=cell_value)
+                    elif isinstance(cell_value, str):
+                        excel_cell_date = datetime.strptime(cell_value, "%m/%d/%Y")
+                    else:
+                        continue
+                except Exception:
                     continue  # skip rows where the first column is not a valid date
                 if excel_cell_date.year == input_date.year and excel_cell_date.month == input_date.month:
                     target_row = idx + 1  # Excel is 1-based
