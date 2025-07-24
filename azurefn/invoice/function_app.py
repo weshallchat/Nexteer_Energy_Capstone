@@ -1,9 +1,14 @@
 import azure.functions as func
 import logging
+<<<<<<< HEAD
 import logging
 import os
 import tempfile
 import tempfile
+=======
+import os
+import tempfile
+>>>>>>> 1c6e65c (new invoice code)
 import json
 import uuid
 import re
@@ -79,6 +84,7 @@ def blob_trigger_v2(myblob: func.InputStream):
                 "fields": extracted_fields,
                 "tables": extracted_tables
             }
+<<<<<<< HEAD
 
             logging.info("Document Intelligence extraction successful.")
 
@@ -178,30 +184,112 @@ def blob_trigger_v2(myblob: func.InputStream):
             table_service = TableServiceClient.from_connection_string(BLOB_CONN_STR)
             table_client = table_service.get_table_client(table_name="InvoiceData")
             table_client.upsert_entity(entity=entity)
+=======
+>>>>>>> 1c6e65c (new invoice code)
 
-        return func.HttpResponse("Record inserted with Verified=False", status_code=200)
+            logging.info("Document Intelligence extraction successful.")
 
-    except Exception as e:
-        logging.exception("Error inserting record")
-        return func.HttpResponse(f"Error: {str(e)}", status_code=500)
+        except Exception as doc_err:
+            logging.error(f"Document Intelligence extraction failed: {doc_err}", exc_info=True)
+            raise
 
-@app.route(route="writeinvoice", methods=["GET"])
-def get_invoice(req: func.HttpRequest) -> func.HttpResponse:
-    try:
-        partition_key = req.params.get("PartitionKey")
-        row_key = req.params.get("RowKey")
+        # OpenAI Formatting (combine fields + extract power usage from tables)
+        try:
+            client = AzureOpenAI(
+                api_key=OPENAI_KEY,
+                azure_endpoint=OPENAI_ENDPOINT,
+                api_version=OPENAI_API_VERSION,
+            )
 
-        if not partition_key or not row_key:
-            return func.HttpResponse("Missing PartitionKey or RowKey", status_code=400)
+            combined_payload = {
+                "fields": extracted_fields,
+                "tables": extracted_tables
+            }
 
-        conn_str = os.environ["AzureWebJobsStorage"]
-        table_service = TableServiceClient.from_connection_string(conn_str)
-        table_client = table_service.get_table_client(table_name="InvoiceData")
-        entity = table_client.get_entity(partition_key=partition_key, row_key=row_key)
+            prompt = (
+                "You are given raw invoice data extracted from Azure Document Intelligence.\n"
+                "It contains key-value fields and also one or more tables.\n\n"
+                "Your task is to extract the required fields below and return them in JSON format "
+                "with exactly the following keys (flat, no nesting). If a value is not found, use an empty string.\n\n"
+                "**Important Instructions:**\n"
+                "- Only extract energy usage (kWh) values from columns labeled with 'kWh', 'Energy Usage', or similar.\n"
+                "- **Do NOT use values from columns labeled 'DERS', 'DER', 'Solar', or 'Export'.**\n"
+                "- Return only a JSON object with the following keys and no extra text or explanation.\n\n"
+                "**Required Output Format:**\n"
+                "{\n"
+                '  "InvoiceNumber": "",\n'
+                '  "VendorName": "",\n'
+                '  "VendorTaxId": "",\n'
+                '  "CustomerName": "",\n'
+                '  "CustomerAddress": "",\n'
+                '  "InvoiceDate": "",\n'
+                '  "DueDate": "",\n'
+                '  "ServiceEndDate": "",\n'
+                '  "InvoiceTotal": "",\n'
+                '  "SubTotal": "",\n'
+                '  "TotalTax": "",\n'
+                '  "AmountDue": "",\n'
+                '  "EnergyUsage_kWh": ""\n'
+                "}\n\n"
+                f"Extraction result:\n{json.dumps(combined_payload, indent=2)}"
+            )
 
-        return func.HttpResponse(json.dumps(entity), mimetype="application/json", status_code=200)
 
-    except Exception as e:
-        logging.exception("Error retrieving record")
-        return func.HttpResponse(f"Error: {str(e)}", status_code=500)
-    
+
+
+            response = client.chat.completions.create(
+                model=OPENAI_DEPLOYMENT,
+                messages=[
+                    {"role": "system", "content": "You are an expert at reading invoices and extracting clean structured data."},
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=4096,
+                temperature=0
+            )
+
+            formatted_json = response.choices[0].message.content.strip()
+            logging.info("OpenAI formatting complete.")
+
+            match = re.search(r'{.*}', formatted_json, re.DOTALL)
+            if match:
+                formatted_json = match.group(0)
+            else:
+                raise ValueError("No valid JSON found in GPT response.")
+
+        except Exception as gpt_err:
+            logging.error(f"OpenAI formatting failed: {gpt_err}", exc_info=True)
+            raise
+
+        # Store to Azure Table Storage
+        try:
+            parsed_output = json.loads(formatted_json)
+            base_filename = os.path.splitext(os.path.basename(myblob.name))[0]
+            partition_key = base_filename
+            row_key = str(uuid.uuid4())
+
+            entity = {
+                "PartitionKey": partition_key,
+                "RowKey": row_key,
+                **{k: str(v) for k, v in parsed_output.items()},
+                "Verified": False
+            }
+
+            logging.info(f"Final entity to insert:\n{json.dumps(entity, indent=2)}")
+
+            table_service = TableServiceClient.from_connection_string(BLOB_CONN_STR)
+            table_client = table_service.get_table_client(table_name="InvoiceData")
+            table_client.upsert_entity(entity=entity)
+
+            logging.info(f"Inserted invoice entity for {partition_key}/{row_key} into Azure Table Storage.")
+
+        except Exception as table_err:
+            logging.error(f"Writing to Table Storage failed: {table_err}", exc_info=True)
+            raise
+
+    except Exception as exc:
+        logging.error(f"Pipeline error for {myblob.name}: {exc}", exc_info=True)
+        raise
+    finally:
+        if temp_pdf_path and os.path.exists(temp_pdf_path):
+            os.remove(temp_pdf_path)
+            logging.info("Temp file cleaned up.")
