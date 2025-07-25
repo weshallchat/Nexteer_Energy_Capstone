@@ -1,6 +1,8 @@
 import azure.functions as func
 import logging
+import logging
 import os
+import tempfile
 import tempfile
 import json
 import uuid
@@ -102,6 +104,10 @@ def blob_trigger_v2(myblob: func.InputStream):
                 "It contains key-value fields and also one or more tables.\n\n"
                 "Your task is to extract the required fields below and return them in JSON format "
                 "with exactly the following keys (flat, no nesting). If a value is not found, use an empty string.\n\n"
+                "**Important Instructions:**\n"
+                "- Only extract energy usage (kWh) values from columns labeled with 'kWh', 'Energy Usage', or similar.\n"
+                "- **Do NOT use values from columns labeled 'DERS', 'DER', 'Solar', or 'Export'.**\n"
+                "- Return only a JSON object with the following keys and no extra text or explanation.\n\n"
                 "**Required Output Format:**\n"
                 "{\n"
                 '  "InvoiceNumber": "",\n'
@@ -118,9 +124,9 @@ def blob_trigger_v2(myblob: func.InputStream):
                 '  "AmountDue": "",\n'
                 '  "EnergyUsage_kWh": ""\n'
                 "}\n\n"
-                "Only return a JSON object with these exact keys (no explanations, no nesting).\n\n"
                 f"Extraction result:\n{json.dumps(combined_payload, indent=2)}"
             )
+
 
 
 
@@ -160,40 +166,29 @@ def blob_trigger_v2(myblob: func.InputStream):
                 **{k: str(v) for k, v in parsed_output.items()},
                 "Verified": False
             }
+            entity = {
+                "PartitionKey": partition_key,
+                "RowKey": row_key,
+                **{k: str(v) for k, v in parsed_output.items()},
+                "Verified": False
+            }
 
             logging.info(f"Final entity to insert:\n{json.dumps(entity, indent=2)}")
 
             table_service = TableServiceClient.from_connection_string(BLOB_CONN_STR)
             table_client = table_service.get_table_client(table_name="InvoiceData")
             table_client.upsert_entity(entity=entity)
+
             logging.info(f"Inserted invoice entity for {partition_key}/{row_key} into Azure Table Storage.")
 
         except Exception as table_err:
             logging.error(f"Writing to Table Storage failed: {table_err}", exc_info=True)
             raise
-        return func.HttpResponse("Record inserted with Verified=False", status_code=200)
 
-    except Exception as e:
-        logging.exception("Error inserting record")
-        return func.HttpResponse(f"Error: {str(e)}", status_code=500)
-
-@app.route(route="writeinvoice", methods=["GET"])
-def get_invoice(req: func.HttpRequest) -> func.HttpResponse:
-    try:
-        partition_key = req.params.get("PartitionKey")
-        row_key = req.params.get("RowKey")
-
-        if not partition_key or not row_key:
-            return func.HttpResponse("Missing PartitionKey or RowKey", status_code=400)
-
-        conn_str = os.environ["AzureWebJobsStorage"]
-        table_service = TableServiceClient.from_connection_string(conn_str)
-        table_client = table_service.get_table_client(table_name="InvoiceData")
-        entity = table_client.get_entity(partition_key=partition_key, row_key=row_key)
-
-        return func.HttpResponse(json.dumps(entity), mimetype="application/json", status_code=200)
-
-    except Exception as e:
-        logging.exception("Error retrieving record")
-        return func.HttpResponse(f"Error: {str(e)}", status_code=500)
-    
+    except Exception as exc:
+        logging.error(f"Pipeline error for {myblob.name}: {exc}", exc_info=True)
+        raise
+    finally:
+        if temp_pdf_path and os.path.exists(temp_pdf_path):
+            os.remove(temp_pdf_path)
+            logging.info("Temp file cleaned up.")
