@@ -1,6 +1,8 @@
 import azure.functions as func
 import logging
+import logging
 import os
+import tempfile
 import tempfile
 import json
 import uuid
@@ -102,6 +104,10 @@ def blob_trigger_v2(myblob: func.InputStream):
                 "It contains key-value fields and also one or more tables.\n\n"
                 "Your task is to extract the required fields below and return them in JSON format "
                 "with exactly the following keys (flat, no nesting). If a value is not found, use an empty string.\n\n"
+                "**Important Instructions:**\n"
+                "- Only extract energy usage (kWh) values from columns labeled with 'kWh', 'Energy Usage', or similar.\n"
+                "- **Do NOT use values from columns labeled 'DERS', 'DER', 'Solar', or 'Export'.**\n"
+                "- Return only a JSON object with the following keys and no extra text or explanation.\n\n"
                 "**Required Output Format:**\n"
                 "{\n"
                 '  "InvoiceNumber": "",\n'
@@ -118,9 +124,9 @@ def blob_trigger_v2(myblob: func.InputStream):
                 '  "AmountDue": "",\n'
                 '  "EnergyUsage_kWh": ""\n'
                 "}\n\n"
-                "Only return a JSON object with these exact keys (no explanations, no nesting).\n\n"
                 f"Extraction result:\n{json.dumps(combined_payload, indent=2)}"
             )
+
 
 
 
@@ -154,6 +160,12 @@ def blob_trigger_v2(myblob: func.InputStream):
             partition_key = base_filename
             row_key = str(uuid.uuid4())
 
+            entity = {
+                "PartitionKey": partition_key,
+                "RowKey": row_key,
+                **{k: str(v) for k, v in parsed_output.items()},
+                "Verified": False
+            }
             entity = {
                 "PartitionKey": partition_key,
                 "RowKey": row_key,
