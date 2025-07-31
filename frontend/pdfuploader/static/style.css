@@ -1,0 +1,78 @@
+:root {
+  --primary: #a93226;
+  --accent: #f9e4d4;
+  --background: #fff8f4;
+  --text-dark: #2c2c2c;
+}
+
+body {
+  font-family: 'Segoe UI', sans-serif;
+  background-color: var(--background);
+  color: var(--text-dark);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 40px;
+  margin: 0;
+}
+
+h2 {
+  color: var(--primary);
+  margin-bottom: 20px;
+}
+
+form {
+  background-color: var(--accent);
+  padding: 20px 30px;
+  border: 2px solid var(--primary);
+  border-radius: 8px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+}
+
+input[type="file"] {
+  margin-bottom: 15px;
+}
+
+button {
+  background-color: var(--primary);
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  font-size: 16px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+button:hover {
+  background-color: #922b21;
+}
+
+#status {
+  margin-top: 20px;
+  font-weight: bold;
+  max-width: 600px;
+  text-align: center;
+}
+
+.instructions {
+  margin-top: 40px;
+  background: white;
+  border: 2px solid var(--primary);
+  padding: 20px 30px;
+  border-radius: 8px;
+  max-width: 700px;
+  line-height: 1.6;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+.logo {
+  height: 120px;
+  width: auto;
+  margin-bottom: 20px;
+  display: block;
+}
+
+a {
+  color: var(--primary);
+}
