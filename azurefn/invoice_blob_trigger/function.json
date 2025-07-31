@@ -1,0 +1,13 @@
+{
+    "scriptFile": "function_app.py",
+    "bindings": [
+      {
+        "name": "myblob",
+        "type": "blobTrigger",
+        "direction": "in",
+        "path": "fileuploads/{name}",
+        "connection": "AzureWebJobsStorage"
+      }
+    ]
+  }
+  
