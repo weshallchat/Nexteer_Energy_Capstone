@@ -1,34 +1,75 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+  <meta charset="UTF-8" />
   <title>Upload PDF to Azure Blob</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-  <h2>Upload a PDF File</h2>
+  <!-- Logo -->
+  <img src="{{ url_for('static', filename='nexteer-logo.png') }}" alt="Nexteer Logo" class="logo" />
+
+  <!-- Heading -->
+  <h2>Upload PDF to Energy Dashboard</h2>
+
+  <!-- Upload Form -->
   <form id="uploadForm">
     <input type="file" id="pdfFile" accept="application/pdf" required />
+    <br />
     <button type="submit">Upload</button>
   </form>
+
   <p id="status"></p>
 
+  <!-- Instructions -->
+  <div class="instructions">
+    <h3>Steps to Upload and View in Excel</h3>
+    <ol>
+      <li><strong>Browse</strong> and select the PDF invoice or report to upload.</li>
+      <li><strong>Upload</strong> to send the file to Azure Blob Storage.</li>
+      <li>
+        Once uploaded, <strong>verify the data</strong> in the Excel sheet:
+        <br />
+        <a href="https://portal.azure.com/#@nexteerautomotive.onmicrosoft.com/resource/subscriptions/cdff2558-0276-4421-8038-047c584819d6/resourceGroups/CMUCapstone-RG/providers/Microsoft.Storage/storageAccounts/nxtenergystg/storagebrowser" target="_blank">
+          Nexteer Energy Excel Sheet
+        </a>
+      </li>
+    </ol>
+  </div>
+
+  <!-- Script -->
   <script>
     document.getElementById('uploadForm').addEventListener('submit', async function (e) {
       e.preventDefault();
+
       const fileInput = document.getElementById('pdfFile');
+      const status = document.getElementById('status');
+
+      if (!fileInput.files.length) {
+        status.textContent = "Please select a PDF file to upload.";
+        return;
+      }
+
       const formData = new FormData();
       formData.append('pdf', fileInput.files[0]);
 
-      const response = await fetch('/upload', {
-        method: 'POST',
-        body: formData
-      });
+      status.textContent = "Uploading...";
 
-      const result = await response.json();
-      const status = document.getElementById('status');
-      if (response.ok) {
-        status.textContent = `✅ Uploaded: ${result.url}`;
-      } else {
-        status.textContent = `❌ Upload failed: ${result.error}`;
+      try {
+        const response = await fetch('/upload', {
+          method: 'POST',
+          body: formData
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+          status.innerHTML = `✅ Upload successful`;
+        } else {
+          status.textContent = `❌ Upload failed: ${result.error}`;
+        }
+      } catch (err) {
+        status.textContent = `❌ Error: ${err.message}`;
       }
     });
   </script>
