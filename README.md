@@ -14,19 +14,6 @@ During the discovery phase, our team identified energy usage reporting automatio
 
 ---
 
-## Deliverables
-
-| Deliverable                    | Description                                                                |
-|-------------------------------|-----------------------------------------------------------------------------|
-| **Executive Summary**         | Overview document (this README)                                            |
-| **Final Report & Docs**       | Project summary, methodology, lessons learned, future work, usage guide    |
-| **Mid-Semester Slides**       | Presentation of progress and preliminary solution                          |
-| **Final Presentation Slides** | Final product, demo, impact, limitations, and handoff plan                 |
-| **Presentation Recording**    | Video of the final presentation                                            |
-| **Creative Video**            | Product teaser and overview                                                |
-| **Codebase**                  | Fully developed and deployed in Nexteer's Azure environment                |
-
----
 
 ## Installation & Configuration
 
@@ -48,3 +35,22 @@ The core product is a **document processing pipeline** hosted in Azure. It lever
 The pipeline ingests and processes utility bills and uploads the extracted, structured data to be visualized in Nexteer’s existing Power BI dashboards.
 
 ---
+
+## Code Overview
+
+The code is split into two parts.
+
+**FrontEnd:** 
+
+- Flask based app written in Python.
+- Upload invoice on the web application.
+- Invoice stored in Azure Blob Storage.
+
+**BackEnd:**
+
+- Blob trigger based Azure Function pulls invoice from Blob Storage.
+- Uses Azure DocuSign API and GPT API to extract fields.
+- Extracted fields loaded to Azure Data Table.
+- HTTP based Azure Function uses MS Graph API to locate SharePoint drive.
+- Uploads extracted fields to corresponding excel in SharePoint.
+
